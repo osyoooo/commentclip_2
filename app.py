@@ -4,6 +4,7 @@
 # - 週次で変更する箇所をフォーム入力し、HTMLを自動生成
 # - 任意件数のコメンテーター（カード）に対応
 # - CSV一括入力にも対応
+# - モノグラム正円表示対応
 # ------------------------------------------------------------
 
 from __future__ import annotations
@@ -122,7 +123,7 @@ def render_card(
           <td style="padding:2px 20px 0 20px;">
             <table role="presentation">
               <tbody><tr>
-                <td align="center" style="width:40px;height:40px;background:#eef2f7;border-radius:20px;color:#64748b;font:700 18px/40px Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">{_mono}</td>
+                <td align="center" style="width:40px;height:40px;background:#eef2f7;border-radius:50%;color:#64748b;font:700 18px Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;line-height:40px;vertical-align:middle;display:table-cell;">{_mono}</td>
                 <td style="width:12px;"></td>
                 <td style="color:#0f172a;font:600 15px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">{_commenter_name}<br>
                   <span style="color:#64748b;font:12px/1.6 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">{_commenter_org}</span>
