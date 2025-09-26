@@ -4,7 +4,6 @@
 # - 週次で変更する箇所をフォーム入力し、HTMLを自動生成
 # - 任意件数のコメンテーター（カード）に対応
 # - CSV一括入力にも対応
-# - 🔄 プレビュー再読み込みボタンを追加（keyでコンポーネントを再マウント）
 # ------------------------------------------------------------
 
 from __future__ import annotations
@@ -37,6 +36,7 @@ def auto_monogram(full_name: str) -> str:
     """
     if not full_name:
         return "名"
+    # 全角スペースも考慮
     tokens = re.split(r"[ \u3000]+", full_name.strip())
     if tokens and tokens[0]:
         return tokens[0][0]
@@ -83,6 +83,7 @@ def render_card(
     1枚のカード（記事＋コメント）HTMLを返す。
     元テンプレートの構造を尊重しつつ、可変部分を差し込み。
     """
+    # フィールド整形
     _issue_label = escape_nl2br(issue_label)
     _article_title = escape_nl2br(article_title)
     _comment_text = escape_nl2br(comment_text)
@@ -158,14 +159,18 @@ def render_email_full(
     description_text: str,
     cards: List[str],
 ) -> str:
-    """メール全体（ヘッダ＋カード群＋フッタ）を結合してHTMLを返す。"""
+    """
+    メール全体（ヘッダ＋カード群＋フッタ）を結合してHTMLを返す。
+    """
     _title_text = escape_nl2br(title_text)
     _badge_text = escape_nl2br(badge_text)
     _header_title = escape_nl2br(header_title)
     _delivery_text = escape_nl2br(delivery_text)
     _description_text = escape_nl2br(description_text)
 
+    # カード間のスペーサ
     spacer = '<div style="height:18px;line-height:18px;">&nbsp;</div>'
+
     body_cards_html = spacer.join(cards)
 
     html_full = f"""<meta charset="UTF-8">
@@ -255,10 +260,6 @@ def render_email_full(
 # Streamlit UI
 # =========================
 st.set_page_config(page_title="コメントクリップ HTMLメーカー", layout="wide")
-
-# NEW: プレビューの再読み込み用ノンスを初期化
-if "preview_nonce" not in st.session_state:
-    st.session_state["preview_nonce"] = 0
 
 st.title("コメントクリップ（HTMLメール）メーカー")
 st.caption("週次の入力内容をフォームで設定 → HTMLを生成・プレビュー・ダウンロード")
@@ -460,25 +461,14 @@ with lc:
 
 with rc:
     st.markdown("**プレビュー（ブラウザ描画）**")
-
-    # NEW: 手動再読み込みボタン（押下で key を更新して強制再マウント）
-    if st.button("🔄 プレビューを再読み込み", help="プレビュー iframe を再生成して描画をやり直します。"):
-        st.session_state["preview_nonce"] += 1
-        # ボタン自体が再実行をトリガーするため即時rerunは不要
-
     # カード数に応じて高さを可変（ざっくり係数）
     preview_height = 520 + max(0, len(cards_html_list)) * 260
-
     try:
-        # NEW: key にノンスを付与して、手動ボタンで確実に再マウント
-        st_html(
-            full_html,
-            height=min(max(preview_height, 600), 2400),
-            scrolling=True,
-            key=f"preview_{st.session_state['preview_nonce']}",
-        )
+        st_html(full_html, height=min(max(preview_height, 600), 2400), scrolling=True)
     except Exception:
+        # 万一、埋め込みに失敗した場合でもダウンロードは可能
         st.info("プレビュー表示に失敗しましたが、HTML自体はダウンロードできます。")
+
 
 st.markdown("---")
 with st.expander("使い方メモ", expanded=False):
@@ -489,8 +479,7 @@ with st.expander("使い方メモ", expanded=False):
    - 入力方法に応じて、**フォーム**で1件ずつ入力するか、**CSV**をアップロードします。  
    - フォーム入力時は「カード数」を指定して各カードの内容を入力してください。  
    - モノグラムは未入力なら**氏名の先頭1文字**（スペース区切りなら**姓の先頭1文字**）を自動採用します。  
-3. 右側でプレビューを確認し、必要に応じて **「🔄 プレビューを再読み込み」** を押すと、描画を強制的にやり直せます。  
-4. **HTMLファイルをダウンロード**してください。  
-5. 生成HTMLは**インラインスタイル**のためメール配信ツールにそのまま貼り付け可能です（各メールクライアントの描画差はご留意ください）。
+3. 右側でプレビューを確認し、**HTMLファイルをダウンロード**してください。  
+4. 生成HTMLは**インラインスタイル**のためメール配信ツールにそのまま貼り付け可能です（各メールクライアントの描画差はご留意ください）。
         """.strip()
     )
