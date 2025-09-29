@@ -4,8 +4,9 @@
 # - 週次で変更する箇所をフォーム入力し、HTMLを自動生成
 # - 任意件数のコメンテーター（カード）に対応
 # - CSV一括入力にも対応
-# - モノグラム正円表示対応
-# - ★ NEW: コメンテーターのデフォルト7名を内蔵、編集UIとカードへの反映を追加
+# - モノグラム正円表示対応（Outlook等でも崩れにくい実装）
+# - コメンテーター7名のデフォルトセットを内蔵・編集可（保存なし）
+# - カードに略歴（bio）も表示可能
 # ------------------------------------------------------------
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from streamlit.components.v1 import html as st_html
 
 
 # =========================
-# デフォルトのコメンテーター定義（★ NEW）
+# デフォルトのコメンテーター定義
 # =========================
 def get_default_commentators() -> List[Dict[str, object]]:
     """
@@ -81,7 +82,7 @@ def get_default_commentators() -> List[Dict[str, object]]:
 
 
 def ensure_state(key: str, default):
-    """st.session_state に key が無ければ default をセット（★ NEW ユーティリティ）"""
+    """st.session_state に key が無ければ default をセット"""
     if key not in st.session_state:
         st.session_state[key] = default
 
@@ -146,19 +147,28 @@ def render_card(
     strip_color: str,
     monogram: Optional[str] = None,
     comment_bar_color: str = "#2563eb",
+    commenter_bio: str = "",  # ★ 追加：略歴をカードに表示
 ) -> str:
     """
     1枚のカード（記事＋コメント）HTMLを返す。
-    元テンプレートの構造を尊重しつつ、可変部分を差し込み。
     """
     _issue_label = escape_nl2br(issue_label)
     _article_title = escape_nl2br(article_title)
     _comment_text = escape_nl2br(comment_text)
     _commenter_name = escape_nl2br(commenter_name)
     _commenter_org = escape_nl2br(commenter_org)
+    _commenter_bio = escape_nl2br(commenter_bio or "")
     _link_url = (link_url or f"#article{idx+1}").strip()
     _strip_color = strip_color or color_cycle(idx)
     _mono = (monogram or auto_monogram(commenter_name)).strip()[:1] or "名"
+
+    # 略歴があれば小さめの行で表示
+    bio_html = (
+        f'<br><span style="color:#94a3b8;'
+        f'font:12px/1.6 Arial,\'Hiragino Kaku Gothic ProN\',Meiryo,sans-serif;'
+        f'word-break:break-word;">{_commenter_bio}</span>'
+        if _commenter_bio else ""
+    )
 
     card_html = f"""
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;">
@@ -185,14 +195,27 @@ def render_card(
             </table>
           </td>
         </tr>
+
         <tr>
           <td style="padding:2px 20px 0 20px;">
             <table role="presentation">
               <tbody><tr>
-                <td align="center" style="width:40px;height:40px;background:#eef2f7;border-radius:50%;color:#64748b;font:700 18px Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;line-height:40px;vertical-align:middle;display:table-cell;">{_mono}</td>
+                <!-- モノグラム：内側divを40x40固定にし、常に正円を維持 -->
+                <td style="width:1%;vertical-align:middle;">
+                  <div style="width:40px;height:40px;max-width:40px;min-width:40px;border-radius:50%;
+                              background:#eef2f7;color:#64748b;
+                              font:700 18px Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;
+                              line-height:40px;text-align:center;mso-line-height-rule:exactly;">
+                    {_mono}
+                  </div>
+                </td>
                 <td style="width:12px;"></td>
-                <td style="color:#0f172a;font:600 15px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">{_commenter_name}<br>
-                  <span style="color:#64748b;font:12px/1.6 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">{_commenter_org}</span>
+                <td style="color:#0f172a;font:600 15px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;">
+                  {_commenter_name}<br>
+                  <span style="color:#64748b;font:12px/1.6 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;">
+                    {_commenter_org}
+                  </span>
+                  {bio_html}
                 </td>
               </tr></tbody>
             </table>
@@ -329,7 +352,7 @@ st.set_page_config(page_title="コメントクリップ HTMLメーカー", layou
 st.title("コメントクリップ（HTMLメール）メーカー")
 st.caption("週次の入力内容をフォームで設定 → HTMLを生成・プレビュー・ダウンロード")
 
-# ★ NEW: コメンテーターの初期化（セッション内）
+# コメンテーターの初期化（セッション内）
 DEFAULT_COMMENTATORS = get_default_commentators()
 for i, c in enumerate(DEFAULT_COMMENTATORS):
     ensure_state(f"cmt_vis_{i}", c["visible"])
@@ -357,11 +380,12 @@ with st.sidebar:
 - `link`（ボタンのリンク。例:`#article1` またはURL）  
 - `monogram`（任意。未指定なら自動）  
 - `strip_color`（任意。例:`#c7d2fe`）  
-- `commentator`（**任意**：`1`〜`7` または氏名で指定すると、該当のデフォルトから`name`/`org`を自動補完）
+- `commentator`（**任意**：`1`〜`7` または氏名で指定すると、デフォルトから`name`/`org`/`bio`を自動補完）  
+- `bio`（**任意**：略歴。指定があればカードにも表示）
         """.strip()
     )
 
-    # CSV雛形のダウンロード（任意）―既存のままでもOK
+    # CSV雛形のダウンロード（任意）
     example_csv = (
         "issue,title,comment,name,org,link,monogram,strip_color\n"
         "第3742号,インボイス制度における返還インボイスの取扱い明確化,💬 コメント例をここに。複数行も可。,田中 太郎,田中税理士事務所,#article1,,#c7d2fe\n"
@@ -411,10 +435,10 @@ delivery_text = format_delivery_date(
 )
 
 # =========================
-# ② コメンテーター設定（★ NEW）
+# ② コメンテーター設定（編集可・保存なし）
 # =========================
 st.subheader("② コメンテーター設定（このセッション内で編集可・保存なし）")
-st.caption("チェックONのコメンテーターのみ、各カードのプルダウンに表示されます。略歴はカードには表示しません（任意の備忘用）。")
+st.caption("チェックONのコメンテーターのみ、各カードのプルダウンに表示されます。略歴はカードにも出力されます（任意）。")
 
 cols = st.columns(2)
 for i, base in enumerate(DEFAULT_COMMENTATORS):
@@ -438,6 +462,16 @@ for i, base in enumerate(DEFAULT_COMMENTATORS):
     if rec["visible"]:
         active_commentators.append(rec)
 
+# 全て（visibleに関わらず）—CSV補完用
+ALL_COMMENTATORS = []
+for i, base in enumerate(DEFAULT_COMMENTATORS):
+    ALL_COMMENTATORS.append({
+        "id": base["id"],
+        "name": st.session_state[f"cmt_name_{i}"].strip(),
+        "org": st.session_state[f"cmt_org_{i}"].strip(),
+        "bio": st.session_state[f"cmt_bio_{i}"].strip(),
+    })
+
 # =========================
 # ③ カード設定（記事＋コメント）
 # =========================
@@ -457,26 +491,29 @@ if input_mode == "CSVをアップロード":
                 st.error(f"CSVに必要な列が不足しています: {sorted(required_cols)}")
             else:
                 for i, row in df.iterrows():
-                    # ★ NEW: commentator列（任意）からの補完
+                    # commentator列（任意）からの補完
                     commentator_token = str(row.get("commentator", "")).strip()
                     cmt_from_token = None
                     if commentator_token:
-                        # 数値ID指定（1〜7）または氏名完全一致で探索
                         try:
                             token_id = int(float(commentator_token))
-                            cmt_from_token = next((c for c in DEFAULT_COMMENTATORS if c["id"] == token_id), None)
+                            cmt_from_token = next((c for c in ALL_COMMENTATORS if c["id"] == token_id), None)
                         except Exception:
                             cmt_from_token = next(
-                                (c for c in DEFAULT_COMMENTATORS if c["name"] == commentator_token), None
+                                (c for c in ALL_COMMENTATORS if c["name"] == commentator_token), None
                             )
-                    # name/org の最終値を決定（CSV記載を優先。欠けていればデフォルトから補完）
+                    # name/org/bio の最終値を決定（CSV記載を優先。欠けていればデフォルトから補完）
                     name_val = str(row.get("name", "")).strip()
                     org_val = str(row.get("org", "")).strip()
+                    bio_val = str(row.get("bio", "")).strip()
+
                     if cmt_from_token:
                         if not name_val:
                             name_val = cmt_from_token["name"]
                         if not org_val:
                             org_val = cmt_from_token["org"]
+                        if not bio_val:
+                            bio_val = cmt_from_token.get("bio", "")
 
                     cards_data.append(
                         {
@@ -485,6 +522,7 @@ if input_mode == "CSVをアップロード":
                             "comment": str(row.get("comment", "")).strip(),
                             "name": name_val,
                             "org": org_val,
+                            "bio": bio_val,  # 略歴
                             "link": str(row.get("link", f"#article{i+1}")).strip(),
                             "monogram": str(row.get("monogram", "")).strip(),
                             "strip_color": str(row.get("strip_color", "")).strip(),
@@ -499,7 +537,7 @@ else:
     comment_bar_color = st.color_picker(
         "コメント左バー（既定）は #2563eb", value="#2563eb", key="bar"
     )
-    # ★ CHANGED: デフォルト7枚
+    # デフォルト7枚
     num_cards = st.number_input("カード数", min_value=1, max_value=20, value=7, step=1)
 
     # プルダウンの選択肢（先頭は手動入力）
@@ -518,14 +556,13 @@ else:
                 )
 
             with col2:
-                # ★ NEW: コメンテーター選択 → 氏名・所属へ自動反映
+                # コメンテーター選択 → 氏名・所属・略歴へ自動入力（必要時のみ）
                 if len(cmt_options) > 1:
-                    # なるべく均等に割り当てる初期選択（--手動-- を避けて1以降）
                     default_index = 0
                     if active_commentators:
                         default_index = (i % len(active_commentators)) + 1
                     selected_label = st.selectbox(
-                        "コメンテーター（選ぶと下の氏名・所属へ自動入力／手動編集OK）",
+                        "コメンテーター（選ぶと下の氏名・所属・略歴へ自動入力／手動編集OK）",
                         options=cmt_options,
                         index=min(default_index, len(cmt_options) - 1),
                         key=f"cmt_select_{i}",
@@ -535,28 +572,32 @@ else:
                         sel_idx = cmt_options.index(selected_label) - 1
                         selected_cmt = active_commentators[sel_idx]
 
-                    # まだ空欄なら自動入力（上書きはしない）
                     name_key = f"name_{i}"
                     org_key = f"org_{i}"
+                    bio_key = f"bio_{i}"
                     mono_key = f"mono_{i}"
+
+                    # 未入力のときのみ自動反映
                     if selected_cmt:
                         if not st.session_state.get(name_key, ""):
                             st.session_state[name_key] = selected_cmt["name"]
                         if not st.session_state.get(org_key, ""):
                             st.session_state[org_key] = selected_cmt["org"]
+                        if not st.session_state.get(bio_key, ""):
+                            st.session_state[bio_key] = selected_cmt.get("bio", "")
                         if not st.session_state.get(mono_key, ""):
                             st.session_state[mono_key] = auto_monogram(selected_cmt["name"])
 
-                    # 明示的に上書きしたい場合のボタン
-                    apply_overwrite = st.button("↑ 選択の内容で氏名・所属を上書きする", key=f"apply_{i}")
+                    # 明示的に上書き
+                    apply_overwrite = st.button("↑ 選択の内容で氏名・所属・略歴を上書きする", key=f"apply_{i}")
                     if apply_overwrite and selected_cmt:
                         st.session_state[name_key] = selected_cmt["name"]
                         st.session_state[org_key] = selected_cmt["org"]
-                        # モノグラムが空なら選択名から再生成
+                        st.session_state[bio_key] = selected_cmt.get("bio", "")
                         if not st.session_state.get(mono_key, ""):
                             st.session_state[mono_key] = auto_monogram(selected_cmt["name"])
 
-                # ここからは自由編集可能（セッション状態を採用）
+                # 以降は自由編集
                 name = st.text_input("氏名（例: 田中 太郎）", key=f"name_{i}")
                 org = st.text_input("所属", key=f"org_{i}")
                 link = st.text_input(
@@ -567,6 +608,9 @@ else:
                 mono = st.text_input(
                     "モノグラム（任意。空欄なら氏名から自動）", key=f"mono_{i}", value=""
                 )
+
+            # 略歴（カードに表示）
+            bio = st.text_area("略歴（カードに表示・任意）", key=f"bio_{i}", height=72)
 
             comment = st.text_area(
                 "コメント本文（複数行OK）", key=f"comment_{i}", value="💬 "
@@ -579,6 +623,7 @@ else:
                     "comment": st.session_state.get(f"comment_{i}", ""),
                     "name": st.session_state.get(f"name_{i}", ""),
                     "org": st.session_state.get(f"org_{i}", ""),
+                    "bio": st.session_state.get(f"bio_{i}", ""),
                     "link": st.session_state.get(f"link_{i}", f"#article{i+1}"),
                     "monogram": st.session_state.get(f"mono_{i}", ""),
                     "strip_color": strip_color,
@@ -606,6 +651,7 @@ for idx, c in enumerate(cards_data):
             strip_color=c.get("strip_color") or color_cycle(idx),
             monogram=c.get("monogram", ""),
             comment_bar_color=c.get("comment_bar_color", "#2563eb"),
+            commenter_bio=c.get("bio", ""),  # 略歴を渡す
         )
     )
 
@@ -637,10 +683,12 @@ with lc:
 
 with rc:
     st.markdown("**プレビュー（ブラウザ描画）**")
+    # カード数に応じて高さを可変（ざっくり係数）
     preview_height = 520 + max(0, len(cards_html_list)) * 260
     try:
         st_html(full_html, height=min(max(preview_height, 600), 2400), scrolling=True)
     except Exception:
+        # 万一、埋め込みに失敗した場合でもダウンロードは可能
         st.info("プレビュー表示に失敗しましたが、HTML自体はダウンロードできます。")
 
 st.markdown("---")
@@ -650,8 +698,8 @@ with st.expander("使い方メモ", expanded=False):
 1. **基本設定**でバッジ名・ヘッダー・配信日・説明文を入力します。  
 2. **コメンテーター設定**で氏名・所属・略歴・表示/非表示を編集します（このセッションのみ）。  
 3. **カード設定**では、  
-   - **フォーム**：各カードの「コメンテーター」から選ぶと**氏名/所属が自動入力**され、手動で上書きも可能です。  
-   - **CSV**：任意列`commentator`に`1`〜`7`または氏名を入れると、デフォルトの氏名/所属を自動補完します。  
+   - **フォーム**：各カードの「コメンテーター」から選ぶと**氏名/所属/略歴が自動入力**され、手動で上書きも可能です。  
+   - **CSV**：任意列`commentator`に`1`〜`7`または氏名を入れると、デフォルトの氏名/所属/略歴を自動補完します。  
    - モノグラムは未入力なら**氏名の先頭1文字**（スペース区切りなら**姓の先頭1文字**）を自動採用します。  
 4. 右側でプレビューを確認し、**HTMLファイルをダウンロード**してください。  
 5. 生成HTMLは**インラインスタイル**のためメール配信ツールにそのまま貼り付け可能です（各メールクライアントの描画差はご留意ください）。
