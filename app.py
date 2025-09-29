@@ -7,6 +7,7 @@
 # - モノグラム正円表示対応（Outlook等でも崩れにくい実装）
 # - コメンテーター7名のデフォルトセットを内蔵・編集可（保存なし）
 # - カードに略歴（bio）も表示可能
+# - 氏名の横に所属を横並び表示（所属が長い場合は同段で折り返し）
 # ------------------------------------------------------------
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ def get_default_commentators() -> List[Dict[str, object]]:
             "name": "非表示",
             "org": "非表示",
             "bio": "非表示",
-            "visible": False,  # ← 初期状態で非表示
+            "visible": False,  # 初期非表示
         },
         {
             "id": 4,
@@ -147,7 +148,7 @@ def render_card(
     strip_color: str,
     monogram: Optional[str] = None,
     comment_bar_color: str = "#2563eb",
-    commenter_bio: str = "",  # ★ 追加：略歴をカードに表示
+    commenter_bio: str = "",
 ) -> str:
     """
     1枚のカード（記事＋コメント）HTMLを返す。
@@ -162,11 +163,11 @@ def render_card(
     _strip_color = strip_color or color_cycle(idx)
     _mono = (monogram or auto_monogram(commenter_name)).strip()[:1] or "名"
 
-    # 略歴があれば小さめの行で表示
+    # 略歴（行間を詰めすぎないよう独立divで表示）
     bio_html = (
-        f'<br><span style="color:#94a3b8;'
+        f'<div style="color:#94a3b8;'
         f'font:12px/1.6 Arial,\'Hiragino Kaku Gothic ProN\',Meiryo,sans-serif;'
-        f'word-break:break-word;">{_commenter_bio}</span>'
+        f'word-break:break-word;margin-top:2px;">{_commenter_bio}</div>'
         if _commenter_bio else ""
     )
 
@@ -210,11 +211,20 @@ def render_card(
                   </div>
                 </td>
                 <td style="width:12px;"></td>
-                <td style="color:#0f172a;font:600 15px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;">
-                  {_commenter_name}<br>
-                  <span style="color:#64748b;font:12px/1.6 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;">
-                    {_commenter_org}
-                  </span>
+
+                <!-- 氏名の右に所属を横並び表示（所属は長文可） -->
+                <td style="color:#0f172a;font:600 15px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tbody><tr>
+                      <td style="white-space:nowrap;vertical-align:baseline;color:#0f172a;font:600 15px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">
+                        {_commenter_name}
+                      </td>
+                      <td style="width:10px;"></td>
+                      <td style="vertical-align:baseline;color:#64748b;font:13px/1.4 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;">
+                        {_commenter_org}
+                      </td>
+                    </tr></tbody>
+                  </table>
                   {bio_html}
                 </td>
               </tr></tbody>
@@ -449,7 +459,7 @@ for i, base in enumerate(DEFAULT_COMMENTATORS):
             st.text_input("所属", key=f"cmt_org_{i}")
             st.text_area("略歴（任意）", key=f"cmt_bio_{i}", height=80)
 
-# 現在有効なコメンテーター（visible=True）のリストを組み立て
+# 有効なコメンテーター
 active_commentators: List[Dict[str, object]] = []
 for i, base in enumerate(DEFAULT_COMMENTATORS):
     rec = {
@@ -462,7 +472,7 @@ for i, base in enumerate(DEFAULT_COMMENTATORS):
     if rec["visible"]:
         active_commentators.append(rec)
 
-# 全て（visibleに関わらず）—CSV補完用
+# すべて（CSV補完用）
 ALL_COMMENTATORS = []
 for i, base in enumerate(DEFAULT_COMMENTATORS):
     ALL_COMMENTATORS.append({
@@ -651,7 +661,7 @@ for idx, c in enumerate(cards_data):
             strip_color=c.get("strip_color") or color_cycle(idx),
             monogram=c.get("monogram", ""),
             comment_bar_color=c.get("comment_bar_color", "#2563eb"),
-            commenter_bio=c.get("bio", ""),  # 略歴を渡す
+            commenter_bio=c.get("bio", ""),
         )
     )
 
@@ -688,7 +698,6 @@ with rc:
     try:
         st_html(full_html, height=min(max(preview_height, 600), 2400), scrolling=True)
     except Exception:
-        # 万一、埋め込みに失敗した場合でもダウンロードは可能
         st.info("プレビュー表示に失敗しましたが、HTML自体はダウンロードできます。")
 
 st.markdown("---")
