@@ -169,16 +169,16 @@ def render_card(
                 <td style="vertical-align:top;text-align:left;">
                   <!-- 号数（インライン） -->
                   <span style="
-                     display:inline-block;vertical-align:top;white-space:nowrap;
-                     color:#475569;font:600 19px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">
-                     {_issue_label}
-                　</span>
+                    display:inline-block;vertical-align:top;white-space:nowrap;
+                    color:#475569;font:600 13px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">
+                    {_issue_label}
+                  </span>
                   <!-- タイトル（インライン / 号数のすぐ右から） -->
                   <span style="
-                      display:inline-block;vertical-align:top;margin-left:6px;
-                      color:#0f172a;font:700 19px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;
-                      word-break:break-word;">
-                      {_article_title}
+                    display:inline-block;vertical-align:top;margin-left:6px; /* ← 距離の調整はここ（例: 4〜10px） */
+                    color:#0f172a;font:700 19px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;
+                    word-break:break-word;">
+                    {_article_title}
                   </span>
                 </td>
               </tr></tbody>
