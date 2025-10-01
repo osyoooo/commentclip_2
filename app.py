@@ -2,13 +2,12 @@
 # ------------------------------------------------------------
 # コメントクリップ（HTMLメール）ジェネレーター（Streamlit）
 # - 週次で変更する箇所をフォーム入力し、HTMLを自動生成
-# - 任意件数のコメンテーター（カード）に対応
-# - CSV一括入力にも対応
-# - モノグラム正円表示対応（Outlook等でも崩れにくい実装）
 # - コメンテーター7名のデフォルトセットを内蔵・編集可（保存なし）
-# - カードに略歴（bio）も表示可能
-# - 氏名の横に所属を横並び表示
-# - 記事タイトルは左寄せで号数の右から開始・上端揃え
+# - カードに略歴（bio）を表示可能
+# - モノグラムは常に正円（Outlook等でも崩れにくい）
+# - 氏名の右に所属を横並び表示
+# - 記事タイトルは左寄せ・号数の右から開始・上端揃え
+# - 「記事を読む」は別タブ（target="_blank"）
 # ------------------------------------------------------------
 
 from __future__ import annotations
@@ -23,77 +22,21 @@ from streamlit.components.v1 import html as st_html
 
 
 # =========================
-# デフォルトのコメンテーター定義
-# =========================
-def get_default_commentators() -> List[Dict[str, object]]:
-    return [
-        {
-            "id": 1,
-            "name": "堀内眞之",
-            "org": "堀内眞之税理士事務所",
-            "bio": "大阪国税局国税訟務官室国税実査官、審理専門官（資産税）、大阪国税不服審判所国税審査官を経て、平成28年税理士事務所開業、令和5年6月より近畿税理士会近畿税務研究センター研究員",
-            "visible": True,
-        },
-        {
-            "id": 2,
-            "name": "杉村博司",
-            "org": "杉村博司税理士事務所",
-            "bio": "大阪国税局消費税課課長補佐、大阪国税局課税第一部国税訟務官室主任国税訟務官などを経て令和2年税理士事務所開業　大阪国税局間税協力会連合会 専務理事",
-            "visible": True,
-        },
-        {
-            "id": 3,
-            "name": "非表示",
-            "org": "非表示",
-            "bio": "非表示",
-            "visible": False,
-        },
-        {
-            "id": 4,
-            "name": "渡會直也",
-            "org": "日東電工株式会社",
-            "bio": "経理財務統括部 税務部長、理事 経理財務本部 税務部長、フェロー 経理財務本部 税務部長を経て、経理財務本部 フェロー（グローバル税務マネジメント担当）",
-            "visible": True,
-        },
-        {
-            "id": 5,
-            "name": "栗原正明",
-            "org": "東レ株式会社",
-            "bio": "理事（税務） 税務室長を経て、現在、シニアフェロー（税務会計） 財務経理部門担当",
-            "visible": True,
-        },
-        {
-            "id": 6,
-            "name": "能勢英雄",
-            "org": "株式会社クボタ",
-            "bio": "財務部 税務グループ長、税務部長を経て監査役室 専任監査役",
-            "visible": True,
-        },
-        {
-            "id": 7,
-            "name": "藤田有子",
-            "org": "アース製薬株式会社",
-            "bio": "税理士法人での勤務を経て、複数の上場企業で副部長などの管理職として、制度会計および経理DXを主に担当。現在アース製薬株式会社 ファイナンスマネジメント部 企画課 課長補佐",
-            "visible": True,
-        },
-    ]
-
-
-def ensure_state(key: str, default):
-    if key not in st.session_state:
-        st.session_state[key] = default
-
-
-# =========================
 # ユーティリティ
 # =========================
 def escape_nl2br(text: str) -> str:
+    """HTMLエスケープ + 改行を <br> に変換"""
     if text is None:
         return ""
     return html.escape(text).replace("\n", "<br>")
 
 
 def auto_monogram(full_name: str) -> str:
+    """
+    氏名からモノグラム（丸アイコンに表示する1文字）を自動抽出。
+      - スペース（半角/全角）で姓・名を分解し、最初のトークンの先頭1文字
+      - 分解できない場合は文字列の先頭1文字
+    """
     if not full_name:
         return "名"
     tokens = re.split(r"[ \u3000]+", full_name.strip())
@@ -103,18 +46,83 @@ def auto_monogram(full_name: str) -> str:
 
 
 def format_delivery_date(d: date, style: str) -> str:
+    """配信日の表記を生成。"""
     if style == "YMD":
         return f"📅 {d.year}年{d.month}月{d.day}日配信号"
     return f"📅 {d.month}月{d.day}日配信号"
 
 
 def color_cycle(idx: int) -> str:
+    """カード上部ストリップ色の既定サイクル。"""
     palette = ["#c7d2fe", "#a5b4fc"]
     return palette[idx % len(palette)]
 
 
+def ensure_state(key: str, default):
+    """st.session_state に key が無ければ default をセット"""
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+
 # =========================
-# HTMLレンダリング
+# デフォルトのコメンテーター定義
+# =========================
+def get_default_commentators() -> List[Dict[str, object]]:
+    """
+    デフォルト7名。3番は要件に合わせて
+      - 氏名: 匿名
+      - 所属: 空文字
+      - 略歴: 税理士
+    として初期化。
+    """
+    return [
+        {
+            "id": 1,
+            "name": "堀内眞之",
+            "org": "堀内眞之税理士事務所",
+            "bio": "大阪国税局国税訟務官室国税実査官、審理専門官（資産税）、大阪国税不服審判所国税審査官を経て、平成28年税理士事務所開業、令和5年6月より近畿税理士会近畿税務研究センター研究員",
+        },
+        {
+            "id": 2,
+            "name": "杉村博司",
+            "org": "杉村博司税理士事務所",
+            "bio": "大阪国税局消費税課課長補佐、大阪国税局課税第一部国税訟務官室主任国税訟務官などを経て令和2年税理士事務所開業　大阪国税局間税協力会連合会 専務理事",
+        },
+        {
+            "id": 3,
+            "name": "匿名",     # ★ 変更
+            "org": "",         # ★ 変更（空）
+            "bio": "税理士",   # ★ 変更
+        },
+        {
+            "id": 4,
+            "name": "渡會直也",
+            "org": "日東電工株式会社",
+            "bio": "経理財務統括部 税務部長、理事 経理財務本部 税務部長、フェロー 経理財務本部 税務部長を経て、経理財務本部 フェロー（グローバル税務マネジメント担当）",
+        },
+        {
+            "id": 5,
+            "name": "栗原正明",
+            "org": "東レ株式会社",
+            "bio": "理事（税務） 税務室長を経て、現在、シニアフェロー（税務会計） 財務経理部門担当",
+        },
+        {
+            "id": 6,
+            "name": "能勢英雄",
+            "org": "株式会社クボタ",
+            "bio": "財務部 税務グループ長、税務部長を経て監査役室 専任監査役",
+        },
+        {
+            "id": 7,
+            "name": "藤田有子",
+            "org": "アース製薬株式会社",
+            "bio": "税理士法人での勤務を経て、複数の上場企業で副部長などの管理職として、制度会計および経理DXを主に担当。現在アース製薬株式会社 ファイナンスマネジメント部 企画課 課長補佐",
+        },
+    ]
+
+
+# =========================
+# HTMLレンダリング（カード/全体）
 # =========================
 def render_card(
     idx: int,
@@ -129,6 +137,7 @@ def render_card(
     comment_bar_color: str = "#2563eb",
     commenter_bio: str = "",
 ) -> str:
+    """1枚のカード（記事＋コメント）HTMLを返す。"""
     _issue_label = escape_nl2br(issue_label)
     _article_title = escape_nl2br(article_title)
     _comment_text = escape_nl2br(comment_text)
@@ -139,6 +148,7 @@ def render_card(
     _strip_color = strip_color or color_cycle(idx)
     _mono = (monogram or auto_monogram(commenter_name)).strip()[:1] or "名"
 
+    # 略歴（任意）
     bio_html = (
         f'<div style="color:#94a3b8;'
         f'font:12px/1.6 Arial,\'Hiragino Kaku Gothic ProN\',Meiryo,sans-serif;'
@@ -161,7 +171,7 @@ def render_card(
                 </td>
                 <td valign="top" style="vertical-align:top;text-align:left;">
                   <div style="color:#0f172a;font:700 19px/1.4 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;margin:0;padding:0;">
-                    {_article_title}
+                    {_article_title}  <!-- ★ 左寄せ -->
                   </div>
                 </td>
               </tr></tbody>
@@ -185,7 +195,7 @@ def render_card(
           <td style="padding:2px 20px 0 20px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tbody><tr>
-                <!-- モノグラム：常に正円 -->
+                <!-- モノグラム：40x40の正円 -->
                 <td style="width:1%;vertical-align:middle;">
                   <div style="width:40px;height:40px;max-width:40px;min-width:40px;border-radius:50%;
                               background:#eef2f7;color:#64748b;
@@ -221,7 +231,8 @@ def render_card(
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tbody><tr>
                 <td style="background:#e8f0ff;border:1px solid #c7d2fe;border-radius:8px;">
-                  <a href="{_link_url}" style="display:block;width:100%;text-align:center;color:#1d4ed8;text-decoration:none;font:700 15px/1 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;padding:12px 18px;border-radius:8px;">
+                  <a href="{_link_url}" target="_blank" rel="noopener noreferrer"
+                     style="display:block;width:100%;text-align:center;color:#1d4ed8;text-decoration:none;font:700 15px/1 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;padding:12px 18px;border-radius:8px;">
                     記事を読む
                   </a>
                 </td>
@@ -243,6 +254,7 @@ def render_email_full(
     description_text: str,
     cards: List[str],
 ) -> str:
+    """メール全体（ヘッダ＋カード群＋フッタ）を結合してHTMLを返す。"""
     _title_text = escape_nl2br(title_text)
     _badge_text = escape_nl2br(badge_text)
     _header_title = escape_nl2br(header_title)
@@ -336,12 +348,14 @@ st.set_page_config(page_title="コメントクリップ HTMLメーカー", layou
 st.title("コメントクリップ（HTMLメール）メーカー")
 st.caption("週次の入力内容をフォームで設定 → HTMLを生成・プレビュー・ダウンロード")
 
+# コメンテーター：セッション初期化（★ モノグラムも設定）
 DEFAULT_COMMENTATORS = get_default_commentators()
 for i, c in enumerate(DEFAULT_COMMENTATORS):
-    ensure_state(f"cmt_vis_{i}", c["visible"])
     ensure_state(f"cmt_name_{i}", c["name"])
     ensure_state(f"cmt_org_{i}", c["org"])
     ensure_state(f"cmt_bio_{i}", c["bio"])
+    # モノグラムは名前から自動初期化（編集可）
+    ensure_state(f"cmt_mono_{i}", auto_monogram(c["name"]))
 
 with st.sidebar:
     st.header("入力方法")
@@ -356,10 +370,15 @@ with st.sidebar:
         """
 **列名（ヘッダ必須）**  
 - `issue` / `title` / `comment` / `name` / `org` / `link`  
-- 任意: `monogram`, `strip_color`, `commentator`（1〜7 または氏名で既定から補完）, `bio`
+**任意列**  
+- `monogram`（未指定ならカード側で自動／設定中のコメンテーターのモノグラムで補完）  
+- `strip_color`（例:`#c7d2fe`）  
+- `commentator`（`1`〜`7` または氏名で、設定中のコメンテーターから `name`/`org`/`bio`/`monogram` を補完）  
+- `bio`（略歴。指定があればカードにも表示）
         """.strip()
     )
 
+    # CSV雛形
     example_csv = (
         "issue,title,comment,name,org,link,monogram,strip_color\n"
         "第3742号,インボイス制度における返還インボイスの取扱い明確化,💬 コメント例をここに。複数行も可。,田中 太郎,田中税理士事務所,#article1,,#c7d2fe\n"
@@ -373,7 +392,9 @@ with st.sidebar:
         use_container_width=True,
     )
 
-# ① 基本設定
+# =========================
+# ① 基本設定（ヘッダ）
+# =========================
 st.subheader("① 基本設定（ヘッダ）")
 c1, c2, c3 = st.columns([1.2, 1.2, 1.0])
 
@@ -406,42 +427,46 @@ delivery_text = format_delivery_date(
     delivery_date, "MD" if delivery_style.startswith("月日") else "YMD"
 )
 
-# ② コメンテーター設定
+# =========================
+# ② コメンテーター設定（全員を選択肢に表示／保存なし）
+# =========================
 st.subheader("② コメンテーター設定（このセッション内で編集可・保存なし）")
-st.caption("チェックONのコメンテーターのみ、各カードのプルダウンに表示されます。略歴はカードにも出力されます（任意）。")
+st.caption("全コメンテーターがカード側のプルダウンに表示されます。ここでモノグラムも設定できます（1文字推奨）。")
 
 cols = st.columns(2)
-for i, base in enumerate(DEFAULT_COMMENTATORS):
+for i, base in enumerate(get_default_commentators()):
     with cols[i % 2]:
-        with st.expander(f"{i+1}. {st.session_state[f'cmt_name_{i}']} / {st.session_state[f'cmt_org_{i}']}", expanded=(i < 2)):
-            st.checkbox("選択肢に表示", key=f"cmt_vis_{i}")
+        with st.expander(
+            f"{i+1}. {st.session_state[f'cmt_name_{i}']} / {st.session_state[f'cmt_org_{i}'] or '（所属未設定）'}",
+            expanded=(i < 2),
+        ):
             st.text_input("氏名", key=f"cmt_name_{i}")
-            st.text_input("所属", key=f"cmt_org_{i}")
+            st.text_input("所属（空欄可）", key=f"cmt_org_{i}")
             st.text_area("略歴（任意）", key=f"cmt_bio_{i}", height=80)
+            # ★ 追加：モノグラム設定
+            mono_val = st.text_input("モノグラム（1文字推奨・未入力時は氏名から自動）", key=f"cmt_mono_{i}")
+            # 正規化：空なら氏名から自動、複数入力時は先頭1文字
+            if not mono_val:
+                st.session_state[f"cmt_mono_{i}"] = auto_monogram(st.session_state[f"cmt_name_{i}"])
+            else:
+                st.session_state[f"cmt_mono_{i}"] = mono_val.strip()[:1] or auto_monogram(st.session_state[f"cmt_name_{i}"])
 
-active_commentators: List[Dict[str, object]] = []
-for i, base in enumerate(DEFAULT_COMMENTATORS):
-    rec = {
-        "id": base["id"],
-        "name": st.session_state[f"cmt_name_{i}"].strip(),
-        "org": st.session_state[f"cmt_org_{i}"].strip(),
-        "bio": st.session_state[f"cmt_bio_{i}"].strip(),
-        "visible": bool(st.session_state[f"cmt_vis_{i}"]),
-    }
-    if rec["visible"]:
-        active_commentators.append(rec)
-
-ALL_COMMENTATORS = []
-for i, base in enumerate(DEFAULT_COMMENTATORS):
+# 全コメンテーター（常に選択肢に出す）
+ALL_COMMENTATORS: List[Dict[str, str]] = []
+for i, base in enumerate(get_default_commentators()):
     ALL_COMMENTATORS.append({
         "id": base["id"],
         "name": st.session_state[f"cmt_name_{i}"].strip(),
         "org": st.session_state[f"cmt_org_{i}"].strip(),
         "bio": st.session_state[f"cmt_bio_{i}"].strip(),
+        "mono": st.session_state[f"cmt_mono_{i}"].strip()[:1] or auto_monogram(st.session_state[f"cmt_name_{i}"]),
     })
 
-# ③ カード設定
+# =========================
+# ③ カード設定（記事＋コメント）
+# =========================
 st.subheader("③ カード設定（記事＋コメント）")
+
 cards_data: List[Dict[str, str]] = []
 
 if input_mode == "CSVをアップロード":
@@ -455,6 +480,7 @@ if input_mode == "CSVをアップロード":
                 st.error(f"CSVに必要な列が不足しています: {sorted(required_cols)}")
             else:
                 for i, row in df.iterrows():
+                    # commentator列（任意）からの補完（id 1〜7 or 氏名一致）
                     commentator_token = str(row.get("commentator", "")).strip()
                     cmt_from_token = None
                     if commentator_token:
@@ -463,13 +489,22 @@ if input_mode == "CSVをアップロード":
                             cmt_from_token = next((c for c in ALL_COMMENTATORS if c["id"] == token_id), None)
                         except Exception:
                             cmt_from_token = next((c for c in ALL_COMMENTATORS if c["name"] == commentator_token), None)
+
                     name_val = str(row.get("name", "")).strip()
                     org_val = str(row.get("org", "")).strip()
                     bio_val = str(row.get("bio", "")).strip()
+                    mono_val = str(row.get("monogram", "")).strip()
+
                     if cmt_from_token:
-                        if not name_val: name_val = cmt_from_token["name"]
-                        if not org_val:  org_val  = cmt_from_token["org"]
-                        if not bio_val:  bio_val  = cmt_from_token.get("bio", "")
+                        if not name_val:
+                            name_val = cmt_from_token["name"]
+                        if not org_val:
+                            org_val = cmt_from_token["org"]
+                        if not bio_val:
+                            bio_val = cmt_from_token.get("bio", "")
+                        if not mono_val:
+                            mono_val = cmt_from_token.get("mono", "")
+
                     cards_data.append(
                         {
                             "issue": str(row.get("issue", "")).strip(),
@@ -479,56 +514,73 @@ if input_mode == "CSVをアップロード":
                             "org": org_val,
                             "bio": bio_val,
                             "link": str(row.get("link", f"#article{i+1}")).strip(),
-                            "monogram": str(row.get("monogram", "")).strip(),
+                            "monogram": mono_val,
                             "strip_color": str(row.get("strip_color", "")).strip(),
                         }
                     )
                 st.success(f"{len(cards_data)} 件のカードを読み込みました。右側でプレビュー可能です。")
         except Exception as e:
             st.error(f"CSVの読み込みに失敗しました: {e}")
+
 else:
+    # フォームで入力
     comment_bar_color = st.color_picker("コメント左バー（既定）は #2563eb", value="#2563eb", key="bar")
     num_cards = st.number_input("カード数", min_value=1, max_value=20, value=7, step=1)
 
-    cmt_options = ["-- 手動入力 --"] + [f"{c['name']}（{c['org']}）" for c in active_commentators]
+    # プルダウンの選択肢（常に全員表示）
+    def _label(c): return f"{c['name']}（{c['org'] or '所属未設定'}）"
+    cmt_options = ["-- 手動入力 --"] + [_label(c) for c in ALL_COMMENTATORS]
 
     for i in range(int(num_cards)):
         with st.expander(f"カード {i+1}", expanded=(i == 0)):
             col1, col2 = st.columns([1.0, 1.0])
             with col1:
-                issue = st.text_input("号数（例: 第3742号）", key=f"issue_{i}", value=f"第{3742+i}号")
-                title_ = st.text_input("記事タイトル", key=f"title_{i}", value="")
+                st.text_input("号数（例: 第3742号）", key=f"issue_{i}", value=f"第{3742+i}号")
+                st.text_input("記事タイトル", key=f"title_{i}", value="")  # ★ 左寄せはHTML側で制御
                 strip_color = st.color_picker("カード上部ストリップ色", value=color_cycle(i), key=f"strip_{i}")
+
             with col2:
-                if len(cmt_options) > 1:
-                    default_index = (i % len(active_commentators)) + 1 if active_commentators else 0
-                    selected_label = st.selectbox(
-                        "コメンテーター（選ぶと下の氏名・所属・略歴へ自動入力／手動編集OK）",
-                        options=cmt_options, index=min(default_index, len(cmt_options) - 1),
-                        key=f"cmt_select_{i}",
-                    )
-                    selected_cmt = None
-                    if selected_label != cmt_options[0]:
-                        sel_idx = cmt_options.index(selected_label) - 1
-                        selected_cmt = active_commentators[sel_idx]
-                    name_key, org_key, bio_key, mono_key = f"name_{i}", f"org_{i}", f"bio_{i}", f"mono_{i}"
-                    if selected_cmt:
-                        if not st.session_state.get(name_key, ""): st.session_state[name_key] = selected_cmt["name"]
-                        if not st.session_state.get(org_key, ""):  st.session_state[org_key]  = selected_cmt["org"]
-                        if not st.session_state.get(bio_key, ""):  st.session_state[bio_key]  = selected_cmt.get("bio", "")
-                        if not st.session_state.get(mono_key, ""): st.session_state[mono_key] = auto_monogram(selected_cmt["name"])
-                    if st.button("↑ 選択の内容で氏名・所属・略歴を上書きする", key=f"apply_{i}") and selected_cmt:
+                default_index = (i % len(ALL_COMMENTATORS)) + 1  # "--手動--"を避ける
+                selected_label = st.selectbox(
+                    "コメンテーター（選ぶと下の項目へ自動入力／手動編集OK）",
+                    options=cmt_options,
+                    index=min(default_index, len(cmt_options) - 1),
+                    key=f"cmt_select_{i}",
+                )
+                selected_cmt = None
+                if selected_label != cmt_options[0]:
+                    sel_idx = cmt_options.index(selected_label) - 1
+                    selected_cmt = ALL_COMMENTATORS[sel_idx]
+
+                name_key, org_key, bio_key, mono_key = f"name_{i}", f"org_{i}", f"bio_{i}", f"mono_{i}"
+
+                # 未入力のときのみ自動反映
+                if selected_cmt:
+                    if not st.session_state.get(name_key, ""):
                         st.session_state[name_key] = selected_cmt["name"]
-                        st.session_state[org_key]  = selected_cmt["org"]
-                        st.session_state[bio_key]  = selected_cmt.get("bio", "")
-                        if not st.session_state.get(mono_key, ""):
-                            st.session_state[mono_key] = auto_monogram(selected_cmt["name"])
-                name = st.text_input("氏名（例: 田中 太郎）", key=f"name_{i}")
-                org = st.text_input("所属", key=f"org_{i}")
-                link = st.text_input("ボタンのリンク（#articleX または URL）", key=f"link_{i}", value=f"#article{i+1}")
-                mono = st.text_input("モノグラム（任意。空欄なら氏名から自動）", key=f"mono_{i}", value="")
-            bio = st.text_area("略歴（カードに表示・任意）", key=f"bio_{i}", height=72)
-            comment = st.text_area("コメント本文（複数行OK）", key=f"comment_{i}", value="💬 ")
+                    if not st.session_state.get(org_key, ""):
+                        st.session_state[org_key] = selected_cmt["org"]
+                    if not st.session_state.get(bio_key, ""):
+                        st.session_state[bio_key] = selected_cmt.get("bio", "")
+                    if not st.session_state.get(mono_key, ""):
+                        st.session_state[mono_key] = selected_cmt.get("mono", "") or auto_monogram(selected_cmt["name"])
+
+                # 明示的に上書き
+                if st.button("↑ 選択の内容で氏名・所属・略歴・モノグラムを上書きする", key=f"apply_{i}") and selected_cmt:
+                    st.session_state[name_key] = selected_cmt["name"]
+                    st.session_state[org_key] = selected_cmt["org"]
+                    st.session_state[bio_key] = selected_cmt.get("bio", "")
+                    st.session_state[mono_key] = selected_cmt.get("mono", "") or auto_monogram(selected_cmt["name"])
+
+                # 以降は自由編集
+                st.text_input("氏名（例: 田中 太郎）", key=name_key)
+                st.text_input("所属（空欄可）", key=org_key)
+                st.text_area("略歴（カードに表示・任意）", key=bio_key, height=72)
+                st.text_input("モノグラム（任意・1文字推奨）", key=mono_key, value="")
+
+                st.text_input("ボタンのリンク（#articleX または URL）", key=f"link_{i}", value=f"#article{i+1}")
+
+            st.text_area("コメント本文（複数行OK）", key=f"comment_{i}", value="💬 ")
 
             cards_data.append(
                 {
@@ -539,15 +591,18 @@ else:
                     "org": st.session_state.get(f"org_{i}", ""),
                     "bio": st.session_state.get(f"bio_{i}", ""),
                     "link": st.session_state.get(f"link_{i}", f"#article{i+1}"),
-                    "monogram": st.session_state.get(f"mono_{i}", ""),
+                    "monogram": (st.session_state.get(f"mono_{i}", "") or auto_monogram(st.session_state.get(f"name_{i}", "")))[:1],
                     "strip_color": strip_color,
                     "comment_bar_color": comment_bar_color,
                 }
             )
 
+# =========================
 # ④ 生成・プレビュー・ダウンロード
+# =========================
 st.subheader("④ 生成・プレビュー・ダウンロード")
 
+# カードHTMLを構築
 cards_html_list: List[str] = []
 for idx, c in enumerate(cards_data):
     cards_html_list.append(
@@ -566,6 +621,7 @@ for idx, c in enumerate(cards_data):
         )
     )
 
+# 全体HTML
 full_html = render_email_full(
     title_text=title_text,
     badge_text=badge_text,
@@ -575,11 +631,13 @@ full_html = render_email_full(
     cards=cards_html_list if cards_html_list else ["<!-- No cards -->"],
 )
 
+# 2カラム：左=ソース/ダウンロード、右=プレビュー
 lc, rc = st.columns([1.0, 1.1])
 
 with lc:
     st.markdown("**生成されたHTML（コピー用）**")
     st.text_area("HTMLソース", value=full_html, height=420, label_visibility="collapsed")
+
     fname = f"comment_clip_{delivery_date.strftime('%Y%m%d')}.html"
     st.download_button(
         "HTMLファイルをダウンロード",
@@ -602,8 +660,9 @@ with st.expander("使い方メモ", expanded=False):
     st.markdown(
         """
 1. **基本設定**でバッジ名・ヘッダー・配信日・説明文を入力します。  
-2. **コメンテーター設定**で氏名・所属・略歴・表示/非表示を編集します（このセッションのみ）。  
-3. **カード設定**では、フォーム入力 or CSVアップロードで内容を作成します。  
-4. 右側でプレビューを確認し、**HTMLファイルをダウンロード**してください。
+2. **コメンテーター設定**で氏名・所属・略歴・モノグラムを編集します（このセッションのみ／全員が選択肢に表示されます）。  
+3. **カード設定**で各カードの内容を入力するか、CSVをアップロードして一括作成します。  
+4. 右側でプレビューを確認し、**HTMLファイルをダウンロード**してください。  
+   ※ ボタンリンクは別タブで開く仕様（`target="_blank"`）です。
         """.strip()
     )
