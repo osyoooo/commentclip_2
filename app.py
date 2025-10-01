@@ -90,9 +90,9 @@ def get_default_commentators() -> List[Dict[str, object]]:
         },
         {
             "id": 3,
-            "name": "匿名",     # ★ 変更
-            "org": "",         # ★ 変更（空）
-            "bio": "税理士",   # ★ 変更
+            "name": "匿名",     # ★ 要件どおり
+            "org": "",         # ★ 空
+            "bio": "税理士",   # ★ 置換
         },
         {
             "id": 4,
@@ -171,7 +171,7 @@ def render_card(
                 </td>
                 <td valign="top" style="vertical-align:top;text-align:left;">
                   <div style="color:#0f172a;font:700 19px/1.4 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;margin:0;padding:0;">
-                    {_article_title}  <!-- ★ 左寄せ -->
+                    {_article_title}
                   </div>
                 </td>
               </tr></tbody>
@@ -348,14 +348,13 @@ st.set_page_config(page_title="コメントクリップ HTMLメーカー", layou
 st.title("コメントクリップ（HTMLメール）メーカー")
 st.caption("週次の入力内容をフォームで設定 → HTMLを生成・プレビュー・ダウンロード")
 
-# コメンテーター：セッション初期化（★ モノグラムも設定）
+# コメンテーター：セッション初期化（★ モノグラムも安全に初期設定）
 DEFAULT_COMMENTATORS = get_default_commentators()
 for i, c in enumerate(DEFAULT_COMMENTATORS):
     ensure_state(f"cmt_name_{i}", c["name"])
     ensure_state(f"cmt_org_{i}", c["org"])
     ensure_state(f"cmt_bio_{i}", c["bio"])
-    # モノグラムは名前から自動初期化（編集可）
-    ensure_state(f"cmt_mono_{i}", auto_monogram(c["name"]))
+    ensure_state(f"cmt_mono_{i}", auto_monogram(c["name"]))  # ← 初回のみ自動設定（以降は触らない）
 
 with st.sidebar:
     st.header("入力方法")
@@ -428,7 +427,7 @@ delivery_text = format_delivery_date(
 )
 
 # =========================
-# ② コメンテーター設定（全員を選択肢に表示／保存なし）
+# ② コメンテーター設定（全員が選択肢に表示・保存なし）
 # =========================
 st.subheader("② コメンテーター設定（このセッション内で編集可・保存なし）")
 st.caption("全コメンテーターがカード側のプルダウンに表示されます。ここでモノグラムも設定できます（1文字推奨）。")
@@ -443,23 +442,23 @@ for i, base in enumerate(get_default_commentators()):
             st.text_input("氏名", key=f"cmt_name_{i}")
             st.text_input("所属（空欄可）", key=f"cmt_org_{i}")
             st.text_area("略歴（任意）", key=f"cmt_bio_{i}", height=80)
-            # ★ 追加：モノグラム設定
-            mono_val = st.text_input("モノグラム（1文字推奨・未入力時は氏名から自動）", key=f"cmt_mono_{i}")
-            # 正規化：空なら氏名から自動、複数入力時は先頭1文字
-            if not mono_val:
-                st.session_state[f"cmt_mono_{i}"] = auto_monogram(st.session_state[f"cmt_name_{i}"])
-            else:
-                st.session_state[f"cmt_mono_{i}"] = mono_val.strip()[:1] or auto_monogram(st.session_state[f"cmt_name_{i}"])
+            # ★ モノグラム入力（ここでは代入しない：利用側で正規化）
+            st.text_input("モノグラム（1文字推奨・未入力時は氏名から自動）", key=f"cmt_mono_{i}")
 
-# 全コメンテーター（常に選択肢に出す）
+# 全コメンテーター（常に選択肢に出す）—利用時に1文字へ正規化
 ALL_COMMENTATORS: List[Dict[str, str]] = []
 for i, base in enumerate(get_default_commentators()):
+    name_i = st.session_state[f"cmt_name_{i}"].strip()
+    org_i = st.session_state[f"cmt_org_{i}"].strip()
+    bio_i = st.session_state[f"cmt_bio_{i}"].strip()
+    mono_raw = (st.session_state.get(f"cmt_mono_{i}", "") or "").strip()
+    mono_i = (mono_raw[:1] or auto_monogram(name_i))  # ★ ここで正規化
     ALL_COMMENTATORS.append({
         "id": base["id"],
-        "name": st.session_state[f"cmt_name_{i}"].strip(),
-        "org": st.session_state[f"cmt_org_{i}"].strip(),
-        "bio": st.session_state[f"cmt_bio_{i}"].strip(),
-        "mono": st.session_state[f"cmt_mono_{i}"].strip()[:1] or auto_monogram(st.session_state[f"cmt_name_{i}"]),
+        "name": name_i,
+        "org": org_i,
+        "bio": bio_i,
+        "mono": mono_i,
     })
 
 # =========================
@@ -505,6 +504,9 @@ if input_mode == "CSVをアップロード":
                         if not mono_val:
                             mono_val = cmt_from_token.get("mono", "")
 
+                    # 最終的に1文字へ正規化
+                    mono_val = (mono_val[:1] or auto_monogram(name_val))
+
                     cards_data.append(
                         {
                             "issue": str(row.get("issue", "")).strip(),
@@ -534,9 +536,10 @@ else:
     for i in range(int(num_cards)):
         with st.expander(f"カード {i+1}", expanded=(i == 0)):
             col1, col2 = st.columns([1.0, 1.0])
+
             with col1:
                 st.text_input("号数（例: 第3742号）", key=f"issue_{i}", value=f"第{3742+i}号")
-                st.text_input("記事タイトル", key=f"title_{i}", value="")  # ★ 左寄せはHTML側で制御
+                st.text_input("記事タイトル", key=f"title_{i}", value="")
                 strip_color = st.color_picker("カード上部ストリップ色", value=color_cycle(i), key=f"strip_{i}")
 
             with col2:
@@ -554,7 +557,7 @@ else:
 
                 name_key, org_key, bio_key, mono_key = f"name_{i}", f"org_{i}", f"bio_{i}", f"mono_{i}"
 
-                # 未入力のときのみ自動反映
+                # 未入力のときのみ自動反映（※ここではウィジェット作成前なので安全）
                 if selected_cmt:
                     if not st.session_state.get(name_key, ""):
                         st.session_state[name_key] = selected_cmt["name"]
@@ -565,22 +568,23 @@ else:
                     if not st.session_state.get(mono_key, ""):
                         st.session_state[mono_key] = selected_cmt.get("mono", "") or auto_monogram(selected_cmt["name"])
 
-                # 明示的に上書き
                 if st.button("↑ 選択の内容で氏名・所属・略歴・モノグラムを上書きする", key=f"apply_{i}") and selected_cmt:
                     st.session_state[name_key] = selected_cmt["name"]
-                    st.session_state[org_key] = selected_cmt["org"]
-                    st.session_state[bio_key] = selected_cmt.get("bio", "")
+                    st.session_state[org_key]  = selected_cmt["org"]
+                    st.session_state[bio_key]  = selected_cmt.get("bio", "")
                     st.session_state[mono_key] = selected_cmt.get("mono", "") or auto_monogram(selected_cmt["name"])
 
-                # 以降は自由編集
+                # 以降は自由編集（ここで初めてウィジェットを作成）
                 st.text_input("氏名（例: 田中 太郎）", key=name_key)
                 st.text_input("所属（空欄可）", key=org_key)
                 st.text_area("略歴（カードに表示・任意）", key=bio_key, height=72)
-                st.text_input("モノグラム（任意・1文字推奨）", key=mono_key, value="")
-
+                st.text_input("モノグラム（任意・1文字推奨）", key=mono_key)
                 st.text_input("ボタンのリンク（#articleX または URL）", key=f"link_{i}", value=f"#article{i+1}")
 
             st.text_area("コメント本文（複数行OK）", key=f"comment_{i}", value="💬 ")
+
+            # 最終的にモノグラムを1文字に正規化して格納
+            mono_final = (st.session_state.get(f"mono_{i}", "") or auto_monogram(st.session_state.get(f"name_{i}", "")))[:1]
 
             cards_data.append(
                 {
@@ -591,7 +595,7 @@ else:
                     "org": st.session_state.get(f"org_{i}", ""),
                     "bio": st.session_state.get(f"bio_{i}", ""),
                     "link": st.session_state.get(f"link_{i}", f"#article{i+1}"),
-                    "monogram": (st.session_state.get(f"mono_{i}", "") or auto_monogram(st.session_state.get(f"name_{i}", "")))[:1],
+                    "monogram": mono_final,
                     "strip_color": strip_color,
                     "comment_bar_color": comment_bar_color,
                 }
@@ -660,9 +664,10 @@ with st.expander("使い方メモ", expanded=False):
     st.markdown(
         """
 1. **基本設定**でバッジ名・ヘッダー・配信日・説明文を入力します。  
-2. **コメンテーター設定**で氏名・所属・略歴・モノグラムを編集します（このセッションのみ／全員が選択肢に表示されます）。  
-3. **カード設定**で各カードの内容を入力するか、CSVをアップロードして一括作成します。  
+2. **コメンテーター設定**で氏名・所属・略歴・モノグラムを編集します（全員が選択肢に表示）。  
+   - モノグラムは出力時に**1文字へ自動正規化**されます。  
+3. **カード設定**で各カードの内容を入力 or CSVをアップロードします。  
 4. 右側でプレビューを確認し、**HTMLファイルをダウンロード**してください。  
-   ※ ボタンリンクは別タブで開く仕様（`target="_blank"`）です。
+   ※ ボタンリンクは**別タブ**で開きます（`target="_blank"`）。
         """.strip()
     )
