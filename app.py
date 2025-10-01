@@ -161,23 +161,24 @@ def render_card(
       <tbody>
         <tr><td style="height:4px;background:{_strip_color};border-top-left-radius:12px;border-top-right-radius:12px;"></td></tr>
 
-        # 見出し行：号数 + 記事タイトル（左寄せ／上端揃え／距離を最小化）
+        <!-- 見出し行：号数 + 記事タイトル（1行目の中心どうしを vertical-align:middle で揃える） -->
         <tr>
           <td style="padding:16px 20px 8px 20px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tbody><tr>
-                <td style="vertical-align:top;text-align:left;">
-                  <!-- 号数（インライン） -->
+                <td style="text-align:left;">
+                  <!-- 号数（inline-block + line-height=font-size） -->
                   <span style="
-                    display:inline-block;vertical-align:top;white-space:nowrap;
-                    color:#475569;font:600 13px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">
+                    display:inline-block; vertical-align:middle; white-space:nowrap;
+                    color:#475569; font-weight:600; font-size:13px; line-height:13px;
+                    mso-line-height-rule:exactly;">
                     {_issue_label}
                   </span>
-                  <!-- タイトル（インライン / 号数のすぐ右から） -->
+                  <!-- タイトル（inline-block + line-height=font-size） -->
                   <span style="
-                    display:inline-block;vertical-align:top;margin-left:6px; /* ← 距離の調整はここ（例: 4〜10px） */
-                    color:#0f172a;font:700 19px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;
-                    word-break:break-word;">
+                    display:inline-block; vertical-align:middle; margin-left:6px;
+                    color:#0f172a; font-weight:700; font-size:19px; line-height:19px;
+                    word-break:break-word; mso-line-height-rule:exactly;">
                     {_article_title}
                   </span>
                 </td>
