@@ -161,18 +161,25 @@ def render_card(
       <tbody>
         <tr><td style="height:4px;background:{_strip_color};border-top-left-radius:12px;border-top-right-radius:12px;"></td></tr>
 
-        <!-- 見出し行：号数 + 記事タイトル（左寄せ／上端揃え） -->
+        # 見出し行：号数 + 記事タイトル（左寄せ／上端揃え／距離を最小化）
         <tr>
-          <td style="padding:18px 20px 8px 20px;">
+          <td style="padding:16px 20px 8px 20px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tbody><tr>
-                <td valign="top" style="vertical-align:top;white-space:nowrap;color:#475569;font:600 13px/1.4 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;padding-right:10px;text-align:left;">
-                  {_issue_label}
-                </td>
-                <td valign="top" style="vertical-align:top;text-align:left;">
-                  <div style="color:#0f172a;font:700 19px/1.4 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;word-break:break-word;margin:0;padding:0;">
+                <td style="vertical-align:top;text-align:left;">
+                  <!-- 号数（インライン） -->
+                  <span style="
+                    display:inline-block;vertical-align:top;white-space:nowrap;
+                    color:#475569;font:600 13px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;">
+                    {_issue_label}
+                  </span>
+                  <!-- タイトル（インライン / 号数のすぐ右から） -->
+                  <span style="
+                    display:inline-block;vertical-align:top;margin-left:6px; /* ← 距離の調整はここ（例: 4〜10px） */
+                    color:#0f172a;font:700 19px/1.3 Arial,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;
+                    word-break:break-word;">
                     {_article_title}
-                  </div>
+                  </span>
                 </td>
               </tr></tbody>
             </table>
